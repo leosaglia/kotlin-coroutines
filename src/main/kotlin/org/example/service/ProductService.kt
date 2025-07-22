@@ -1,37 +1,44 @@
 package org.example.service
 
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
-import kotlinx.coroutines.delay
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.awaitAll
 import org.example.model.Product
 import org.springframework.stereotype.Service
+import org.springframework.web.reactive.function.client.WebClient
+import kotlinx.coroutines.reactor.awaitSingle
 
 @Service
-class ProductService {
+class ProductService(
+    private val webClientBuilder: WebClient.Builder
+) {
     private val produtos = mutableListOf<Product>(
-        Product(nome = "Produto 1", preco = 10.0),
-        Product(nome = "Produto 2", preco = 20.0),
-        Product(nome = "Produto 3", preco = 30.0)
+        Product(id = 1, nome = "Produto 1", preco = 10.0),
+        Product(id = 2, nome = "Produto 2", preco = 20.0),
+        Product(id = 3, nome = "Produto 3", preco = 30.0),
+        Product(id = 4, nome = "Produto 4", preco = 10.0),
+        Product(id = 5, nome = "Produto 5", preco = 20.0),
+        Product(id = 6, nome = "Produto 6", preco = 30.0),
+        Product(id = 7, nome = "Produto 7", preco = 30.0)
     )
 
-    suspend fun listar(): List<Product> = coroutineScope {
+    suspend fun listar(): List<Product> = withContext(Dispatchers.IO) {
         produtos.map { produto ->
-            val nomeDeferred = async { buscarNome(produto) }
-            val precoDeferred = async { buscarPreco(produto) }
-            Product(
-                nome = nomeDeferred.await(),
-                preco = precoDeferred.await()
-            )
-        }
+            async {
+                val preco = buscarPreco(produto.id)
+                produto.copy(preco = preco)
+            }
+        }.awaitAll()
     }
 
-    private suspend fun buscarNome(produto: Product): String {
-        delay(200)
-        return produto.nome
-    }
-
-    private suspend fun buscarPreco(produto: Product): Double {
-        delay(200)
-        return produto.preco
+    private suspend fun buscarPreco(id: Long): Double {
+        val webClient = webClientBuilder.baseUrl("http://localhost:3000").build()
+        return webClient.get()
+            .uri("/product/${id}/preco")
+            .retrieve()
+            .bodyToMono(Double::class.java)
+            .awaitSingle()
     }
 }
